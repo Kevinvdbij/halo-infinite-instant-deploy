@@ -6,7 +6,7 @@ There are two ways to use this program:
 2. Download and run the standalone executable from [releases](https://github.com/Kevinvdbij/halo-infinite-instant-deploy/releases).
 
 ### Keybinds
-You can set the keybinds by clicking the "Set" button and pressing your desired key.
+You can set the keybinds by clicking the "Set" button and pressing your desired key.  
 The configured keybinds need to match your in-game keybinds for equipment selection and equipment use.
 
 The script will intercept the "Equipment Switch" input and fire both the "Equipment Switch" and "Use Equipment" inputs instead.
