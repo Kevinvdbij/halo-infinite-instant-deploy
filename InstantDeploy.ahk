@@ -14,15 +14,18 @@ global WindowBind := ""
 global UseSwap := ""
 global WindowOnStart := ""
 
+global WindowPosX := ""
+global WindowPosY := ""
+
 ; Script globals
 global ScriptName = regexreplace(A_scriptname,"\..*","")
 global ConfigPath := ScriptName . ".ini"
 global IconPath := ScriptName . ".ico"
 global DetectedKey := ""
+global DebugMode := false
 
 ; Load configuration
 LoadIni(false)
-OnExit("SaveIni")
 
 ; Assign hotkeys
 Hotkey, $*%GrappleBind%, UseAbility, on
@@ -36,43 +39,66 @@ if (FileExist(IconPath)) {
 }
 
 ; Create menu bar entries
-Menu, ConfigMenu, Add, Save, SaveIni
+SaveFunc := Func("SaveIni").Bind("all")
+Menu, ConfigMenu, Add, Save, %SaveFunc%
 Menu, ConfigMenu, Add, Reset, ResetIni
-Menu, MenuBar, Add, Settings, :ConfigMenu
+
+Menu, ScriptMenu, Add, Reload, ReloadScript
+Menu, ScriptMenu, Add, Pause, PauseScript
+
+IsChecked := !A_IsSuspended ? "Check" : "Uncheck"
+Menu, ScriptMenu, Add, Hotkeys, SuspendHotkeys
+Menu, ScriptMenu, %IsChecked%, Hotkeys
+
+Menu, ScriptMenu, Add, Debug, ToggleDebug
+Menu, ScriptMenu, Add, Exit, Exit
+
+Menu, Tray, NoStandard
+Menu, Tray, Add, Open Instant Deploy Window, ShowWindow
+Menu, Tray, Add, ; Divider
+Menu, Tray, Add, Reload Script, ReloadScript
+Menu, Tray, Add, Pause Script, PauseScript
+Menu, Tray, Add, Suspend Hotkeys, SuspendHotkeys
+Menu, Tray, Add, Exit, Exit
+Menu, Tray, Add, ; Divider
+Menu, Tray, Add, Debug Mode, ToggleDebug
+
+Menu, MenuBar, Add, Script, :ScriptMenu
+Menu, MenuBar, Add, Config, :ConfigMenu
 
 Gui, Menu, MenuBar
 
 ; Create GUI controls
-Gui, +AlwaysOnTop +Owner -0x30000
+Gui, +AlwaysOnTop -MaximizeBox
 
 Gui, Font, s8, Verdana
 
 Gui, Add, Text, vUseText w120 Center section,
-Gui, Add, Button, Default w120 gSetUse vSetUseButton,
+Gui, Add, Button, Default w120 gSetUseClicked vSetUseButton,
 
 Gui, Add, Text, vSensorText w120 Center,
-Gui, Add, Button, Default w120 gSetSensor vSetSensorButton,
+Gui, Add, Button, Default w120 gSetSensorClicked vSetSensorButton,
 
 Gui, Add, Text, vThrusterText w120 Center,
-Gui, Add, Button, Default w120 gSetThruster vSetThrusterButton,
+Gui, Add, Button, Default w120 gSetThrusterClicked vSetThrusterButton,
 
 Gui, Font, s7, Verdana
-Gui, Add, CheckBox, gSwapUseBind vUseSwap w120 h50 Checked%UseSwap% Center,
+Gui, Add, CheckBox, gUseSwapChecked vUseSwap w120 h50 Checked%UseSwap% Center,
 Gui, Font, s8, Verdana
 
 Gui, Add, Button, Default w120 section, Hide
 
 Gui, Add, Text, vGrappleText w120 Center ym,
-Gui, Add, Button, Default w120 gSetGrapple vSetGrappleButton,
+Gui, Add, Button, Default w120 gSetGrappleClicked vSetGrappleButton,
 
 Gui, Add, Text, vWallText w120 Center,
-Gui, Add, Button, Default w120 gSetWall vSetWallButton,
+Gui, Add, Button, Default w120 gSetWallClicked vSetWallButton,
 
 Gui, Add, Text, vWindowText w120 Center,
-Gui, Add, Button, Default w120 gSetWindow vSetWindowButton,
+Gui, Add, Button, Default w120 gSetWindowClicked vSetWindowButton,
 
 Gui, Font, s7, Verdana
-Gui, Add, CheckBox, vWindowOnStart w120 h50 Checked%WindowOnStart% Center,
+Gui, Add, CheckBox, gWindowOnStartChecked vWindowOnStart w120 h50 Checked%WindowOnStart% Center,
 Gui, Font, s8, Verdana
 
 Gui, Add, Button, Default w120, Stop
@@ -85,31 +111,25 @@ If (WindowOnStart = true) {
 }
 
 ; Link Use and Grapple keys
-#If SwapUse
-    Gosub SwapUseBind
+IsSwapped := UseSwap ? "on" : "off"
+Hotkey, *%UseBind%, SendGrapple, %IsSwapped%
 
-#If WinActive("ahk_exe haloinfinite.exe") ; Only trigger hotkeys in game window.
+ExitFunc := Func("SaveIni").Bind("window")
+OnExit(ExitFunc)
+
 return
 
-ButtonHide:
-    HideWindow()
-    return
-
-ButtonStop:
-SaveIni()
-ExitApp
-
-GuiClose:
-SaveIni()
-ExitApp
-
-ResetIni:
+ResetIni() {
     LoadIni(true)
+    SaveIni("all")
     PopulateGUI()
-    SaveIni()
+    ShowWindow()
     Return
+}
 
-SetUse:
+SetUseClicked:
+    Gui, Submit, NoHide
+
     GuiControl,,SetUseButton, ...
     Gosub, ListenForKey
 
@@ -117,10 +137,14 @@ SetUse:
     UseBind := DetectedKey
     Hotkey, $*%UseBind%, UseAbility, on
 
+    SaveIni("keybinds")
+
     PopulateGUI()
     return
 
-SetGrapple:
+SetGrappleClicked:
+    Gui, Submit, NoHide
+
     GuiControl,,SetGrappleButton, ...
     Gosub, ListenForKey
 
@@ -128,10 +152,14 @@ SetGrapple:
     GrappleBind := DetectedKey
     Hotkey, $*%GrappleBind%, UseAbility, on
 
+    SaveIni("keybinds")
+
     PopulateGUI()
     return
 
-SetSensor:
+SetSensorClicked:
+    Gui, Submit, NoHide
+
     GuiControl,,SetSensorButton, ...
     Gosub, ListenForKey
 
@@ -139,10 +167,14 @@ SetSensor:
     SensorBind := DetectedKey
     Hotkey, $*%SensorBind%, UseAbility, on
 
+    SaveIni("keybinds")
+
     PopulateGUI()
     return
 
-SetWall:
+SetWallClicked:
+    Gui, Submit, NoHide
+
     GuiControl,,SetWallButton, ...
     Gosub, ListenForKey
 
@@ -150,10 +182,14 @@ SetWall:
     WallBind := DetectedKey
     Hotkey, $*%WallBind%, UseAbility, on
 
+    SaveIni("keybinds")
+
     PopulateGUI()
     return
 
-SetThruster:
+SetThrusterClicked:
+    Gui, Submit, NoHide
+
     GuiControl,,SetThrusterButton, ...
     Gosub, ListenForKey
 
@@ -161,19 +197,59 @@ SetThruster:
     ThrusterBind := DetectedKey
     Hotkey, $*%ThrusterBind%, UseAbility, on
 
+    SaveIni("keybinds")
+
     PopulateGUI()
     return
 
-SetWindow:
+SetWindowClicked:
+    Gui, Submit, NoHide
+
     GuiControl,,SetWindowButton, ...
     Gosub, ListenForKey
 
     Hotkey, $*%WindowBind%, off
     WindowBind := DetectedKey
-    Hotkey, $*%WindowBind%, UseAbility, on
+    Hotkey, %WindowBind%, HideWindow, on
+
+    SaveIni("keybinds")
 
     PopulateGUI()
     return
+
+
+UseSwapChecked:
+    Gui, Submit, NoHide
+
+    IsSwapped := UseSwap ? "on" : "off"
+    Hotkey, *%UseBind%, SendGrapple, %IsSwapped%
+    SaveIni("keybinds")
+
+    return
+
+WindowOnStartChecked:
+    Gui, Submit, NoHide
+
+    SaveIni("keybinds")
+    return
+
+
+ButtonHide:
+    HideWindow()
+    return
+
+ButtonStop:
+ExitApp
+
+GuiClose:
+    if WinExist("Instant Deploy")
+    {
+        WinGetPos, X, Y
+
+        IniWrite, %X%, % ConfigPath, window, x
+        IniWrite, %Y%, % ConfigPath, window, y
+    }
+ExitApp
 
 ListenForKey:
     loop {
@@ -183,17 +259,7 @@ ListenForKey:
         }
     }
 
-
-SwapUseBind:
-    Gui, Submit, NoHide
-    Hotkey, *%UseBind%, SendGrapple, off
-
-    if (UseSwap = true) {
-        Hotkey, *%UseBind%, on
-    }
-
-    return
-
+; courtesy of /u/deleted ;(
 AnyKeyIsDown(detectKeyboard:=1,detectMouse:=1) { ; return whatever key is down that has the largest scan code
 	if (detectKeyboard) {
 		loop % 86 { ; detect all common physical keys: https://www.win.tue.nl/~aeb/linux/kbd/scancodes-1.html
@@ -216,9 +282,15 @@ AnyKeyIsDown(detectKeyboard:=1,detectMouse:=1) { ; return whatever key is down t
 ;Fire ability swap key and use equipment key.
 UseAbility() {
     UsedHotkey := RegExReplace(A_ThisHotkey, "\$\*")
-    Send {Blind}{%UsedHotkey%}%UseBind%
-    KeyWait % UsedHotkey
-    return
+
+    if (WinActive("ahk_exe haloinfinite.exe") or DebugMode) {
+        Send {Blind}{%UsedHotkey%}{%UseBind%}
+        KeyWait % UsedHotkey
+        return
+    }
+    Send {Blind}{%UsedHotkey%}
+
+    ;Send {LAlt}
 }
 
 LoadIni(UseDefaults) {
@@ -228,9 +300,10 @@ LoadIni(UseDefaults) {
     IniRead, WallBindValue, % ConfigPath, keybinds, wallbind, f
     IniRead, ThrusterBindValue, % ConfigPath, keybinds, thrusterbind, LAlt
     IniRead, WindowBindValue, % ConfigPath, keybinds, windowbind, Home
-    IniRead, SwapUseValue, % ConfigPath, keybinds, swapuse, 1
-    IniRead, WindowOnStartValue, % ConfigPath, keybinds, windowonstart, 1
+    IniRead, SwapUseValue, % ConfigPath, keybinds, useswap, 1
+    IniRead, WindowOnStartValue, % ConfigPath, keybinds, x, 1
     
+    ; Keybinds
     UseBind := (UseDefaults ? "q" : UseBindValue)
     GrappleBind := (UseDefaults ? "o" : GrappleBindValue)
     SensorBind := (UseDefaults ? "c" : SensorBindValue)
@@ -239,19 +312,39 @@ LoadIni(UseDefaults) {
     WindowBind := (UseDefaults ? "Home" : WindowBindValue)
     UseSwap := (UseDefaults ? "1" : SwapUseValue)
     WindowOnStart := (UseDefaults ? "1" : WindowOnStartValue)
+
+    ; Window
+    DefaultWidth := A_ScreenWidth - 295
+    DefaultHeight := A_ScreenHeight - 360
+
+    IniRead, X, % ConfigPath, window, x, %DefaultWidth%
+    IniRead, Y, % ConfigPath, window, y, %DefaultHeight%
+
+    WindowPosX := (UseDefaults ? DefaultWidth : X)
+    WindowPosY := (UseDefaults ? DefaultHeight : Y)
 }
 
-SaveIni() {
-    Gui, Submit, NoHide
+SaveIni(section := "all") {
+    if (section = "keybinds" or section = "all") {
+        IniWrite, %UseBind%, % ConfigPath, keybinds, usebind
+        IniWrite, %GrappleBind%, % ConfigPath, keybinds, grapplebind
+        IniWrite, %SensorBind%, % ConfigPath, keybinds, sensorbind
+        IniWrite, %WallBind%, % ConfigPath, keybinds, wallbind
+        IniWrite, %ThrusterBind%, % ConfigPath, keybinds, thrusterbind
+        IniWrite, %WindowBind%, % ConfigPath, keybinds, windowbind
+        IniWrite, %UseSwap%, % ConfigPath, keybinds, useswap
+        IniWrite, %WindowOnStart%, % ConfigPath, keybinds, windowonstart
+    }
 
-    IniWrite, %UseBind%, % ConfigPath, keybinds, usebind
-    IniWrite, %GrappleBind%, % ConfigPath, keybinds, grapplebind
-    IniWrite, %SensorBind%, % ConfigPath, keybinds, sensorbind
-    IniWrite, %WallBind%, % ConfigPath, keybinds, wallbind
-    IniWrite, %ThrusterBind%, % ConfigPath, keybinds, thrusterbind
-    IniWrite, %WindowBind%, % ConfigPath, keybinds, windowbind
-    IniWrite, %UseSwap%, % ConfigPath, keybinds, swapuse
-    IniWrite, %WindowOnStart%, % ConfigPath, keybinds, windowonstart
+    if (section = "window" or section = "all") {
+        if WinExist("Instant Deploy")
+        {
+            WinGetPos, X, Y
+
+            IniWrite, %X%, % ConfigPath, window, x
+            IniWrite, %Y%, % ConfigPath, window, y
+        }
+    }
 }
 
 PopulateGUI() {
@@ -270,7 +363,7 @@ PopulateGUI() {
     GuiControl,,ThrusterText, Thruster: %ThrusterBind%
     GuiControl,,SetThrusterButton, Set
 
-    GuiControl,,WindowText, Toggle Window: %WindowBind%
+    GuiControl,,WindowText, Menu: %WindowBind%
     GuiControl,,SetWindowButton, Set
 
     GuiControl,,UseSwap, Grapple with Use Equipment key
@@ -278,21 +371,62 @@ PopulateGUI() {
 }
 
 ShowWindow() {
-    OffsetX := A_ScreenWidth - 300
-    OffsetY := A_ScreenHeight - 316
-
-    Gui, Show, w270 h240 x%OffsetX% y%OffsetY% NoActivate, Instant Deploy
+    Gui, -Owner
+    
+    Gui, Show, w270 h240 x%WindowPosX% y%WindowPosY% NoActivate, Instant Deploy
 
     Hotkey, $*%WindowBind%, HideWindow, on
 }
 
 HideWindow() {
+    Gui, +Owner
     Gui, Hide
 
     Hotkey, $*%WindowBind%, ShowWindow, on
 }
 
 SendGrapple() {
-    SendLevel, 1
-    Send {Blind}%GrappleBind%
+    if (WinActive("ahk_exe haloinfinite.exe") or DebugMode) {
+        SendLevel, 1
+        Send {Blind}%GrappleBind%
+    }
+    Send %UseBind%
+}
+
+ReloadScript() {
+    Reload
+    Sleep 1000 ; If successful, the reload will close this instance during the Sleep, so the line below will never be reached.
+    MsgBox, 4,, The script could not be reloaded. Would you like to open it for editing?
+    IfMsgBox, Yes, Edit
+    return
+}
+
+PauseScript() {
+    IsChecked := !A_IsPaused ? "Check" : "Uncheck"
+    Menu, Tray, %IsChecked%, Pause Script
+    Menu, ScriptMenu, %IsChecked%, Pause
+    
+    Pause, Toggle
+}
+
+Exit() {
+    ExitApp
+}
+
+ToggleDebug() {
+    DebugMode := !DebugMode
+    
+    IsChecked := DebugMode ? "Check" : "Uncheck"
+    Menu, Tray, %IsChecked%, Debug Mode
+    Menu, ScriptMenu, %IsChecked%, Debug
+}
+
+SuspendHotkeys() {
+    Suspend, Toggle
+    
+    IsChecked := A_IsSuspended ? "Check" : "Uncheck"
+    Menu, Tray, %IsChecked%, Suspend Hotkeys
+
+    IsChecked := !A_IsSuspended ? "Check" : "Uncheck"
+    Menu, ScriptMenu, %IsChecked%, Hotkeys
 }
